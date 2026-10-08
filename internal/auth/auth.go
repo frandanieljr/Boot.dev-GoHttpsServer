@@ -6,6 +6,11 @@ import (
 	"github.com/alexedwards/argon2id"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"errors"
+	"net/http"
+	"strings"
+	"crypto/rand"
+	"encoding/hex"
 )
 
 // HashPassword cria um hash Argon2id a partir da password
@@ -73,6 +78,30 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 
 
 
+// GetBearerToken extrai o token JWT do cabeçalho Authorization
+func GetBearerToken(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New("no authorization header included")
+	}
 
+	// O formato esperado é "Bearer TOKEN_STRING"
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		return "", errors.New("malformed authorization header")
+	}
+
+	return parts[1], nil
+}
+
+// MakeRefreshToken gera uma string aleatória de 32 bytes (256 bits) em formato hexadecimal
+func MakeRefreshToken() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
 
 

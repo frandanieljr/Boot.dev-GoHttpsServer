@@ -1,0 +1,11 @@
+# Variáveis de ambiente
+.env
+
+# Pasta go
+go/
+
+# Binários gerados
+out/
+
+# Cache
+.cache/
