@@ -127,6 +127,9 @@ func main() {
 
 	//registrar rota de revoke
 	mux.HandleFunc("POST /api/revoke", apiCfg.handlerRevoke)
+	
+	//registrar rota para update de usuarios 
+	mux.HandleFunc("PUT /api/users", apiCfg.handlerUsersUpdate)
 
 	// Iniciar o servidor na porta 8080
 	server := &http.Server{
@@ -528,4 +531,60 @@ func (cfg *apiConfig) handlerRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+
+func (cfg *apiConfig) handlerUsersUpdate(w http.ResponseWriter, r *http.Request) {
+	type parameters struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+
+	// 1. Extrair e validar o Token de Acesso do cabeçalho
+	tokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Missing or malformed token")
+		return
+	}
+
+	userID, err := auth.ValidateJWT(tokenString, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid or expired token")
+		return
+	}
+
+	// 2. Descodificar o corpo da requisição
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	err = decoder.Decode(&params)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	// 3. Fazer o hash da nova password
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't hash password")
+		return
+	}
+
+	// 4. Atualizar o utilizador na base de dados usando o ID do token
+	user, err := cfg.DB.UpdateUser(r.Context(), database.UpdateUserParams{
+		Email:          params.Email,
+		HashedPassword: hashedPassword,
+		ID:             userID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't update user")
+		return
+	}
+
+	// 5. Responder com status 200 OK e o utilizador atualizado (sem a password)
+	respondWithJSON(w, http.StatusOK, User{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	})
 }
